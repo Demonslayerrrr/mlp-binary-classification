@@ -33,7 +33,7 @@ class BinaryClassificationModel:
     def __init__(self,hidden_layers_number,hidden_layers_features_number):
         self.layers = {}
 
-        for i in range(hidden_layers_number+1):
+        for i in range(hidden_layers_number*hidden_layers_features_number):
             self.layers[f'w{i}'] = np.random.randn()
 
         self.items = list(self.layers.items())
