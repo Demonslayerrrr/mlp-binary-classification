@@ -36,8 +36,6 @@ class BinaryClassificationModel:
         for i in range(hidden_layers_number*hidden_layers_features_number):
             self.layers[f'w{i}'] = np.random.randn()
 
-        self.items = list(self.layers.items())
-
 
         self.x1, self.x2 = np.random.randn(),np.random.randn()
 
