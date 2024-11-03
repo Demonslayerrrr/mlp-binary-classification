@@ -29,16 +29,11 @@ def relu(x):
 def sigmoid(x):
     return 1/(1+np.exp(-x))
 
-def mse(y,y_pred):
-    return ((y - y_pred)**2).mean()
-
-def deriv_mse(y,y_pred):
-    return -2*(y-y_pred)
 class BinaryClassificationModel:
-    def __init__(self,layers_number):
+    def __init__(self,hidden_layers_number,hidden_layers_features_number):
         self.layers = {}
 
-        for i in range(layers_number+1):
+        for i in range(hidden_layers_number+1):
             self.layers[f'w{i}'] = np.random.randn()
 
         self.items = list(self.layers.items())
@@ -48,7 +43,7 @@ class BinaryClassificationModel:
 
         self.biases = {}
 
-        for i in range(layers_number+1):
+        for i in range(hidden_layers_number+1):
             self.biases[f"b{i}"] = np.random.randn()
     def forward(self):
         pass
@@ -58,7 +53,7 @@ class BinaryClassificationModel:
         return self.biases
     def print_features(self):
         return self.x1,self.x2
-model = BinaryClassificationModel(layers_number=2)
+model = BinaryClassificationModel(hidden_layers_number=2,hidden_layers_features_number=3)
 
 print(model.print_layers())
 print(model.print_biases())
