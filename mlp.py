@@ -10,115 +10,119 @@ train_split = int(0.8 * len(x))
 x_train, y_train = x[:train_split], y[:train_split]
 x_test, y_test = x[train_split:], y[train_split:]
 
-learning_rate = 0.01
 
-def relu(x):
-    return np.maximum(0, x)
-
+class Relu:
+    def relu(self,x):
+        self.x = x
+        return np.maximum(0,self.x)
+    def derivative(self,derivative_value):
+        self.x = derivative_value.copy()
+        self.x[self.x <= 0] = 0
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 class Linear:
     def __init__(self, input_features, output_features):
-        self.weights = np.random.randn(input_features, output_features) * np.sqrt(2. / input_features)  
-        self.biases = np.zeros(output_features)
+        self.weights = 0.1 * np.random.randn(input_features, output_features)
+        self.biases = np.zeros((1,output_features))
+
 
     def single_forward(self, x):
-        return np.dot(x, self.weights) + self.biases
+        self.x =x
+        return np.dot(self.x, self.weights) + self.biases
+    
+    def derivatives(self,derivative_values):
+        self.derivative_weights = np.dot(np.array(self.x).T, derivative_values)
+        self.derivative_biases = np.sum(derivative_values, axis=0, keepdims=True)
+
+        self.derivative_layer = np.dot(derivative_values,self.weights.T)
 
 class BCE:
-    def __init__(self):
-        pass
-
-    def loss_function(self, y_true, y_pred):
+    def loss_function(self, y_true:np.ndarray, y_pred:np.ndarray):
         y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
         return -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
 
-    def derivative(self, y_true, y_pred):
-        return y_pred - y_true
+    def derivative(self, y_true:np.ndarray, y_pred:np.ndarray):
+        y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
 
-    def derivative_weights(self, previous_layer_output, dL_dz):
-        return np.dot(previous_layer_output.T, dL_dz) / len(previous_layer_output)
+        gradient = - (y_true / y_pred) + ((1 - y_true) / (1 - y_pred))
+        return gradient
 
-    def derivative_biases(self, dL_dz):
-        return np.mean(dL_dz, axis=0)
+class GradientDescent:
+    def __init__(self,lr=0.01):
+        self.learning_rate = lr
+    
+    def update_values(self,layer:Linear):
+        layer.weights -= self.learning_rate*layer.derivative_weights
+        layer.biases -= self.learning_rate*layer.derivative_biases
 
 class BinaryClassificationModel:
     def __init__(self):
-        self.hidden_layer_1 = Linear(2, 10)
-        self.hidden_layer_2 = Linear(10, 10)
+        self.input_layer = Linear(2,5)
+        self.hidden_layer_1 = Linear(5, 5)
+        self.hidden_layer_2 = Linear(5, 5)
+        self.output_layer = Linear(5, 1)
 
-        self.output_layer = Linear(10, 1)
+        self.relu = Relu()
 
     def forward(self, x):
-        self.hidden_1_output = self.hidden_layer_1.single_forward(x)
-        self.relu_hidden_1_output = relu(self.hidden_1_output)
+        # Pass through the input layer first
+        input_output = self.input_layer.single_forward(x)
+        relu_input_output = self.relu.relu(input_output)
         
-        self.hidden_2_output = self.hidden_layer_2.single_forward(self.relu_hidden_1_output)
-        self.relu_hidden_2_output = relu(self.hidden_2_output)
+        # Then pass through hidden layers
+        hidden_1_output = self.hidden_layer_1.single_forward(relu_input_output)
+        relu_hidden_1_output = self.relu.relu(hidden_1_output)
         
-        self.output_logits = self.output_layer.single_forward(self.relu_hidden_2_output)
-        return self.output_logits
-
-    def backward(self, y_true, y_pred):
-        bce = BCE()
+        hidden_2_output = self.hidden_layer_2.single_forward(relu_hidden_1_output)
+        relu_hidden_2_output = self.relu.relu(hidden_2_output)
         
-        # Reshape y_true and y_pred
-        y_true = y_true.reshape(-1, 1)  # Ensure y_true is a column vector
-        y_pred = y_pred.reshape(-1, 1)  # Ensure y_pred is a column vector
+        # Finally, pass through the output layer
+        return self.output_layer.single_forward(relu_hidden_2_output)
+    def backward(self, loss_deriv):
+        self.output_layer.derivatives(loss_deriv)
+        self.relu.derivative(self.output_layer.derivative_layer)
 
-        self.output_layer_error = bce.derivative(y_true, y_pred)
-        
-        # Calculate gradients for output layer
-        self.d_output_layer_weights = bce.derivative_weights(self.relu_hidden_2_output, self.output_layer_error)
-        self.d_output_layer_biases = bce.derivative_biases(self.output_layer_error)
+        self.hidden_layer_1.derivatives(self.relu.x)
+        self.relu.derivative(self.hidden_layer_2.derivative_layer)
 
-        # Backpropagate through hidden layer 2
-        self.hidden_layer_2_error = np.dot(self.output_layer_error, self.output_layer.weights.T)
-        self.hidden_layer_2_error *= (self.relu_hidden_2_output > 0)  # Apply ReLU derivative
-        
-        # Calculate gradients for hidden layer 2
-        self.d_hidden_2_weights = bce.derivative_weights(self.relu_hidden_1_output, self.hidden_layer_2_error)
-        self.d_hidden_2_biases = bce.derivative_biases(self.hidden_layer_2_error)
+        self.hidden_layer_2.derivatives(self.relu.x)
+        self.relu.derivative(self.hidden_layer_1.derivative_layer)
 
-        # Backpropagate through hidden layer 1
-        self.hidden_layer_1_error = np.dot(self.hidden_layer_2_error, self.hidden_layer_2.weights.T)
-        self.hidden_layer_1_error *= (self.relu_hidden_1_output > 0)  # Apply ReLU derivative
-        
-        # Calculate gradients for hidden layer 1
-        self.d_hidden_1_weights = bce.derivative_weights(x_train, self.hidden_layer_1_error)  # Use x_train
-        self.d_hidden_1_biases = bce.derivative_biases(self.hidden_layer_1_error)
-
-        return (self.d_output_layer_weights, self.d_output_layer_biases,
-                self.d_hidden_2_weights, self.d_hidden_2_biases,
-                self.d_hidden_1_weights, self.d_hidden_1_biases)
-
-    def step(self, d_output_weights, d_output_biases,
-             d_hidden_2_weights, d_hidden_2_biases,
-             d_hidden_1_weights, d_hidden_1_biases):
-        
-        self.output_layer.weights -= learning_rate * d_output_weights
-        self.output_layer.biases -= learning_rate * d_output_biases
-
-        self.hidden_layer_2.weights -= learning_rate * d_hidden_2_weights
-        self.hidden_layer_2.biases -= learning_rate * d_hidden_2_biases
-
-        self.hidden_layer_1.weights -= learning_rate * d_hidden_1_weights
-        self.hidden_layer_1.biases -= learning_rate * d_hidden_1_biases
+        self.input_layer.derivatives(self.relu.x)
 
     def fit(self, epochs):
         bce = BCE()
+        gradient_descent = GradientDescent()
 
         for epoch in range(epochs):
+
             y_logits = self.forward(x_train)
             y_pred_probs = sigmoid(y_logits)
+
+
             loss = bce.loss_function(y_train, y_pred_probs)
 
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch}, Loss: {loss:.5f}")
 
-            d_weights = self.backward(y_train, y_pred_probs)
-            self.step(*d_weights)
+            loss_deriv = bce.derivative(y_train, y_pred_probs)
+
+
+            self.backward(loss_deriv)
+
+
+            gradient_descent.update_values(self.output_layer)
+            gradient_descent.update_values(self.hidden_layer_2)
+            gradient_descent.update_values(self.hidden_layer_1)
+            gradient_descent.update_values(self.input_layer)
+
+            if epoch % 100 == 0:
+                print(f'Epoch: {epoch} | Loss: {loss}')
+
+
+    
+
+
 
 model = BinaryClassificationModel()
+
 model.fit(epochs=1000)
