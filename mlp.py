@@ -2,7 +2,7 @@ from sklearn.datasets import make_circles
 import numpy as np
 
 n_samples = 1000
-np.random.seed(100)
+np.random.seed(100)#
 
 x, y = make_circles(n_samples=n_samples, noise=0.03, random_state=100)
 
